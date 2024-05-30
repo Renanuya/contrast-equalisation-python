@@ -1,64 +1,59 @@
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+from rich.console import Console
+from rich.table import Table
 
-data = pd.read_excel('data/example_data.xlsx', header=None)
-data_values = data.values
+file_path = "data/example_data.xlsx"
+df = pd.read_excel(file_path, header=None)  #
 
-hist, bins = np.histogram(data_values.flatten(), bins=256, range=[0,256])
-cdf = hist.cumsum()  # Cumulative distribution function (CDF)
+data = df.values
 
-cdf_m = np.ma.masked_equal(cdf, 0)
-cdf_m = (cdf_m - cdf_m.min()) * 255 / (cdf_m.max() - cdf_m.min())
-cdf = np.ma.filled(cdf_m, 0).astype('uint8')
+histogram = [0] * 256
+for row in data:
+    for pixel in row:
+        histogram[pixel] += 1
 
-equalized_data = cdf[data_values]
+cdf = [0] * 256
+cdf_value = 0
+for i in range(256):
+    cdf_value += histogram[i]
+    cdf[i] = cdf_value
 
-# Create tables of pixel value and frequency
-unique, counts = np.unique(data_values, return_counts=True)
-freq_table = pd.DataFrame({'Value': unique, 'Count': counts})
+total_pixels = len(data) * len(data[0])
+cdf_min = min(filter(lambda x: x > 0, cdf))
 
-cdf_table = pd.DataFrame({
-    'Pixel Intensity': np.arange(256),
-    'CDF': cdf,
-    'Equalized Value': cdf
-})
+L = 256
+equalized = [0] * 256
+for i in range(256):
+    equalized[i] = round(((cdf[i] - cdf_min) / (total_pixels - cdf_min)) * (L - 1))
 
-# Visualization
-fig, axs = plt.subplots(3, 2, figsize=(15, 15))
+equalized_image = []
+for row in data:
+    new_row = []
+    for pixel in row:
+        new_row.append(equalized[pixel])
+    equalized_image.append(new_row)
 
-# Original Image
-axs[0, 0].imshow(data_values, cmap='gray', vmin=0, vmax=255)
-axs[0, 0].set_title('Original Data')
-axs[0, 0].axis('off')
+console = Console()
 
-# Original Image Matrix
-axs[0, 1].axis('off')
-table_0 = axs[0, 1].table(cellText=data_values, loc='center', cellLoc='center', fontsize=10)
-axs[0, 1].set_title('Original Data As Matrix', pad=75)
+table1 = Table(show_header=True, header_style="bold cyan")
+table1.add_column("Value", style="dim", width=12)
+table1.add_column("Count", style="green")
 
-# Pixel Value and Frequency Table
-axs[1, 0].bar(freq_table['Value'], freq_table['Count'])
-axs[1, 0].set_title('Original Pixel Values and Frequencies')
-axs[1, 0].set_xlabel('Pixel Value')
-axs[1, 0].set_ylabel('Frequency')
+for i in range(256):
+    if histogram[i] > 0:
+        table1.add_row(str(i), str(histogram[i]))
 
-# CDF and Equalized Value Table
-axs[1, 1].hist(equalized_data.flatten(), bins=256, alpha=0.5, color='blue', label='Equalized Data')
-axs[1, 1].set_title('Equalized Pixel Values and Frequencies')
-axs[1, 1].set_xlabel('Pixel Value')
-axs[1, 1].set_ylabel('Frequency')
-axs[1, 1].legend()
+console.print("\n[bold cyan]Value & Count Table:[/bold cyan]")
+console.print(table1)
 
-# Equalized Image
-axs[2, 0].imshow(equalized_data, cmap='gray', vmin=0, vmax=255)
-axs[2, 0].set_title('Equalized Data')
-axs[2, 0].axis('off')
+table2 = Table(show_header=True, header_style="bold magenta")
+table2.add_column("Pixel Intensity", style="dim", width=16)
+table2.add_column("CDF(v)", style="blue")
+table2.add_column("Equalized v", style="red")
 
-# Equalized Image Matrix
-axs[2, 1].axis('off')
-table_1 = axs[2, 1].table(cellText=equalized_data, loc='center', cellLoc='center', fontsize=10)
-axs[2, 1].set_title('Equalized Data Matrix', pad=75)
+for i in range(256):
+    if histogram[i] > 0:
+        table2.add_row(str(i), str(cdf[i]), str(equalized[i]))
 
-plt.tight_layout()
-plt.show()
+console.print("\n[bold magenta]Pixel Intensity, CDF(v), Equalized v Table:[/bold magenta]")
+console.print(table2)
